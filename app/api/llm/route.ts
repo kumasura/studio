@@ -116,7 +116,7 @@ export async function POST(req: Request) {
       ],
     });
 
-    const last = await finalStream.finalMessage();
+    const last = await modelWithTools.invoke(messages);
     await enqueue(session_id, {
       type: "state_patch",
       node: node_id,
