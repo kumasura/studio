@@ -109,10 +109,25 @@ function StudioInner() {
     setEdges((eds) => addEdge({ ...params, type: 'smoothstep' }, eds))
   }, [])
 
-  // Selection & inspector
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const selectedNode = nodes.find((n) => n.id === selectedId)
-  const updateSelected = (patch: any) => { if (!selectedNode) return; setNodes((ns) => ns.map((n) => (n.id === selectedNode.id ? { ...n, data: { ...n.data, ...patch } } : n))) }
+  // Selection & deletion support
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return
+      if (selectedEdgeId) {
+        setEdges((eds) => eds.filter((e) => e.id !== selectedEdgeId))
+        setSelectedEdgeId(null)
+      } else if (selectedNodeId) {
+        setNodes((ns) => ns.filter((n) => n.id !== selectedNodeId))
+        setEdges((eds) => eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId))
+        setSelectedNodeId(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectedEdgeId, selectedNodeId])
 
   // Minimal local run (no network) to show state updates
   const [logs, setLogs] = useState<any[]>([])
@@ -120,7 +135,6 @@ function StudioInner() {
   const runOnce = useCallback(async () => {
     setRunning(true)
     setLogs([])
-    // Fake events to prove wiring
     const fake = [
       { type: 'node_enter', node: 'planner', message: 'Planning…' },
       { type: 'state_patch', node: 'tool1', patch: { status: 'running', tool: 'calc' } },
@@ -140,6 +154,90 @@ function StudioInner() {
   }, [])
 
   return (
+    <div className="h-screen w-full bg-gradient-to-b from-zinc-50 to-white">
+      <div className="p-4 flex items-center justify-between">
+        <div className="text-xl font-bold">Studio (Vercel)</div>
+        <div className="flex items-center gap-2">
+          <button className="px-3 py-2 rounded-2xl shadow bg-black text-white disabled:opacity-50" onClick={runOnce} disabled={running}>{running ? 'Running…' : 'Run'}</button>
+          <button className="px-3 py-2 rounded-2xl border" onClick={() => setLogs([])}>Reset</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-12 gap-4 p-4">
+        {/* Palette */}
+        <div className="col-span-2">
+          <div className="rounded-2xl border p-3 bg-white">
+            <div className="text-sm font-semibold mb-2">Node Palette</div>
+            <ul className="space-y-2 text-sm">
+              <li draggable onDragStart={(e) => onDragStart(e as any, { type: 'stage', data: { label: 'LLM', subtitle: 'Model call' } })} className="cursor-move px-2 py-1 rounded-xl border">LLM</li>
+              <li draggable onDragStart={(e) => onDragStart(e as any, { type: 'stage', data: { label: 'Tool', subtitle: 'Function call', tool: 'calc', params: { expression: 'sin(PI/4)**2' } } })} className="cursor-move px-2 py-1 rounded-xl border">Tool: Calc</li>
+              <li draggable onDragStart={(e) => onDragStart(e as any, { type: 'stage', data: { label: 'Tool', subtitle: 'Function call', tool: 'weather', params: { city: 'Delhi' } } })} className="cursor-move px-2 py-1 rounded-xl border">Tool: Weather</li>
+              <li draggable onDragStart={(e) => onDragStart(e as any, { type: 'router', data: {} })} className="cursor-move px-2 py-1 rounded-xl border">Router (yes/no)</li>
+              <li draggable onDragStart={(e) => onDragStart(e as any, { type: 'stage', data: { label: 'Memory', subtitle: 'State' } })} className="cursor-move px-2 py-1 rounded-xl border">Memory</li>
+              <li draggable onDragStart={(e) => onDragStart(e as any, { type: 'stage', data: { label: 'Aggregator', subtitle: 'Reducer' } })} className="cursor-move px-2 py-1 rounded-xl border">Aggregator</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Canvas */}
+        <div className="col-span-7 h-[75vh] rounded-2xl overflow-hidden border bg-white" ref={reactFlowWrapper}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            nodeTypes={nodeTypes}
+            fitView
+            onInit={setRfInstance}
+            onDrop={onDrop}
+            onDragOver={onDragOver}
+            onSelectionChange={({ nodes, edges }) => {
+              setSelectedNodeId(nodes?.[0]?.id ?? null)
+              setSelectedEdgeId(edges?.[0]?.id ?? null)
+            }}
+            onEdgeDoubleClick={(_, edge) => setEdges((eds) => eds.filter((e) => e.id !== edge.id))}
+          >
+            <Background />
+            <Controls />
+            <MiniMap />
+            <Panel position="top-left">
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-xs p-2 bg-white/80 rounded-xl shadow">
+                Drag from blue port → black port to connect. Select an edge and press Delete/Backspace (or double‑click it) to remove.
+              </motion.div>
+            </Panel>
+          </ReactFlow>
+        </div>
+
+        {/* Inspector & Log */}
+        <div className="col-span-3 h-[75vh] grid grid-rows-2 gap-4">
+          <div className="rounded-2xl border p-3 bg-white overflow-auto">
+            <div className="text-sm font-semibold mb-2">Inspector</div>
+            <div className="text-sm text-zinc-500">Select a node to edit.</div>
+          </div>
+          <div className="rounded-2xl border p-3 bg-white overflow-auto">
+            <div className="text-sm font-semibold mb-2">Event Log</div>
+            <ul className="space-y-1 text-[11px]">
+              {logs.map((l, i) => (
+                <li key={i} className="flex items-center gap-2">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500" />
+                  <span className="font-mono">{l.node || l.type}</span>
+                  <span className="text-zinc-500">{l.message || JSON.stringify(l.patch || l)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+return (
+    <div className="h-screen w-full bg-gradient-to-b from-zinc-50 to-white">
+      {/* The rest of the component is above; this line is a placeholder for diff safety */}
+    </div>
+  )
     <div className="h-screen w-full bg-gradient-to-b from-zinc-50 to-white">
       <div className="p-4 flex items-center justify-between">
         <div className="text-xl font-bold">Studio (Vercel)</div>
