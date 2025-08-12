@@ -9,10 +9,10 @@ export async function POST(req: Request) {
     return new Response(JSON.stringify({ error: 'missing session_id' }), { status: 400 });
   }
 
-  // IMPORTANT: await the graph execution so the worker stays alive
-  await executeGraph(session_id, graph);
+  // Wait for full graph execution (LLM will stream via /api/llm internally)
+  const finalStates = await executeGraph(session_id, graph);
 
-  return new Response(JSON.stringify({ ok: true }), {
+  return new Response(JSON.stringify({ ok: true, finalStates }), {
     headers: { 'content-type': 'application/json' },
   });
 }
