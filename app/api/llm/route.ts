@@ -1,8 +1,8 @@
 export const runtime = "edge";
 
-import { toolSchemas, chat } from "@/lib/llm";
+import { calcTool, weatherTool, chat } from "@/lib/llm";
 import { enqueue } from "@/lib/runtime";
-import { zodToJsonSchema } from "zod-to-json-schema"; 
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 // Very small safe evaluators (same as your runtime tools)
 function safeCalc(expression: string) {
@@ -18,17 +18,25 @@ const WEATHER: Record<string, any> = {
   Bengaluru: { tempC: 24, condition: "Light Rain" },
 };
 
+const TOOL_SCHEMAS: Record<string, any> = {
+  calc: calcTool,
+  weather: weatherTool,
+};
+
 export async function POST(req: Request) {
-  const { session_id, messages, node_id } = await req.json();
+  const { session_id, messages, node_id, tools = [] } = await req.json();
 
   
   // SSE stream out to the client via the existing /api/stream
   // Here we only enqueue events so the UI sees them in the ReactFlow panel.
   const encoder = new TextEncoder();
 
-  // Wrap the model with tools enabled
+  // Wrap the model with the tools requested for this run
+  const toolDefs = tools
+    .map((name: string) => TOOL_SCHEMAS[name])
+    .filter((t: any) => t);
   const modelWithTools = chat.bindTools(
-    toolSchemas.map((t) => ({
+    toolDefs.map((t: any) => ({
       type: "function" as const,
       function: {
         name: t.name,
