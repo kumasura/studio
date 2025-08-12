@@ -1,38 +1,59 @@
 export const runtime = 'edge';
 
-import { dequeueBatch, SESSIONS } from '@/lib/runtime';
+import { dequeueBatch } from '@/lib/runtime';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const sessionId = searchParams.get('session_id') || '';
-  // Don’t hard-fail on SESSIONS.has when using KV (instance may be fresh)
   if (!sessionId) {
     return new Response(JSON.stringify({ error: 'invalid session' }), { status: 400 });
   }
 
   const encoder = new TextEncoder();
+  const signal = (req as any).signal as AbortSignal | undefined;
+
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   const stream = new ReadableStream({
-    async start(controller) {
-      const send = (obj: any) =>
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+    start(controller) {
+      // initial ping helps some proxies “lock in” SSE mode
+      controller.enqueue(encoder.encode(': ok\n\n'));
 
-      let done = false;
+      (async () => {
+        try {
+          let lastHeartbeat = Date.now();
 
-      const tick = async () => {
-        if (done) return;
-        const batch = await dequeueBatch(sessionId, 64);
-        for (const evt of batch) {
-          send(evt);
-          if (evt?.type === 'done') {
-            done = true;
-            controller.close();
-            return;
+          while (!signal?.aborted) {
+            // drain a batch from KV/memory
+            const batch = await dequeueBatch(sessionId, 64);
+
+            for (const evt of batch) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(evt)}\n\n`));
+              if (evt?.type === 'done') {
+                controller.close();
+                return;
+              }
+            }
+
+            // heartbeat every ~15s so Vercel doesn’t idle-close
+            const now = Date.now();
+            if (now - lastHeartbeat > 15000) {
+              controller.enqueue(encoder.encode(': keep-alive\n\n'));
+              lastHeartbeat = now;
+            }
+
+            await sleep(batch.length ? 10 : 150);
           }
+
+          // client disconnected
+          try { controller.close(); } catch {}
+        } catch (err) {
+          try { controller.error(err as any); } catch {}
         }
-        setTimeout(tick, batch.length ? 10 : 150);
-      };
-      tick();
+      })();
+    },
+    cancel() {
+      // client closed connection
     },
   });
 
@@ -40,7 +61,7 @@ export async function GET(req: Request) {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
+      'Connection': 'keep-alive',
     },
   });
 }
