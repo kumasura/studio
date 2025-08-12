@@ -30,10 +30,12 @@ export async function POST(req: Request) {
   if (!session_id) {
     return new Response(JSON.stringify({ error: 'invalid session' }), { status: 400 });
   }
-
+  const toolDefs = tools
+    .map((name: string) => TOOL_SCHEMAS[name])
+    .filter((t: any) => t);
   const modelWithTools = chat.bindTools(
-    toolSchemas.map((t) => ({
-      type: 'function' as const,
+    toolDefs.map((t: any) => ({
+      type: "function" as const,
       function: {
         name: t.name,
         description: t.description,
