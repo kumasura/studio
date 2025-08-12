@@ -1,6 +1,7 @@
 // lib/runtime.ts
 import type { } from 'react'; // keep TS happy on edge
 import { kv } from '@vercel/kv'; // works on Edge; safe to import even if not configured
+import { calcTool, weatherTool } from './llm';
 
 export type Event = { type: string; node?: string; message?: string; patch?: any; metrics?: any };
 export type Session = { queue: Event[] };
@@ -83,6 +84,11 @@ export const TOOLS: Record<string, (p: any) => Promise<any>> = {
   weather: toolWeather,
 };
 
+const TOOL_SCHEMAS: Record<string, any> = {
+  calc: calcTool,
+  weather: weatherTool,
+};
+
 // --- Origin helper for internal fetches ---
 function getOrigin() {
   const explicit = process.env.NEXT_PUBLIC_APP_ORIGIN;
@@ -117,25 +123,53 @@ export async function executeGraph(sessionId: string, graph: any) {
     const isLLM = label.toLowerCase() === 'llm' || tool === 'llm';
 
     if (isLLM) {
-      // LLM: stream via /api/llm
-      const userQuery =
-        (node?.data?.state?.query as string) ?? 'Plan the next steps and call tools if needed.';
-      const messages = [
+      // Gather messages from incoming nodes
+      const upstream = edges.filter((e) => e.target === nid).map((e) => e.source);
+      const messages: any[] = [
         { role: 'system', content: 'You are a helpful planner that may call tools if needed.' },
-        { role: 'user', content: userQuery },
       ];
+      for (const uid of upstream) {
+        const uNode = nodes[uid];
+        const uState = finalStates[uid] || uNode?.data?.state || {};
+        const label = (uNode?.data?.label || '').toString().toLowerCase();
+        if (label === 'input') {
+          const q = uState.query || uNode?.data?.state?.query;
+          if (q) messages.push({ role: 'user', content: String(q) });
+        } else if (label === 'tool') {
+          const result = uState.result || uNode?.data?.state?.result;
+          if (result)
+            messages.push({
+              role: 'system',
+              content: `Tool ${uNode.data?.tool}: ${JSON.stringify(result)}`,
+            });
+        }
+      }
 
-      await enqueue(sessionId, { type: 'state_patch', node: nid, patch: { status: 'planning' } });
+      // Determine which tools to bind (neighbors that are tool nodes)
+      const connectedTools = Array.from(
+        new Set(
+          edges
+            .filter((e) => e.source === nid || e.target === nid)
+            .map((e) => (e.source === nid ? nodes[e.target] : nodes[e.source]))
+            .filter((n) => (n?.data?.label || '').toLowerCase() === 'tool')
+            .map((n) => n?.data?.tool as string)
+            .filter(Boolean)
+        )
+      );
+
+      await enqueue(sessionId, {
+        type: 'state_patch',
+        node: nid,
+        patch: { status: 'planning' },
+      });
 
       const origin = getOrigin();
-      // Let /api/llm push streaming updates; we'll just mark a placeholder final here
       await fetch(`${origin}/api/llm`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, node_id: nid, messages }),
+        body: JSON.stringify({ session_id: sessionId, node_id: nid, messages, tools: connectedTools }),
       });
 
-      // we can't know the final answer synchronously; leave it to the stream
       finalStates[nid] = { status: 'started' };
     } else if (tool && TOOLS[tool]) {
       // Regular tool: run synchronously and patch immediately

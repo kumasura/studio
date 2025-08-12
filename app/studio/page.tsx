@@ -198,9 +198,10 @@ function StudioInner() {
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedEdgeId, selectedNodeId, setEdges, setNodes]);
 
-  // Fake run to show state updates
-  const [logs, setLogs] = useState<any[]>([]);
-  const [running, setRunning] = useState(false);
+// Fake run to show state updates
+const [logs, setLogs] = useState<any[]>([]);
+const [running, setRunning] = useState(false);
+const [consoleText, setConsoleText] = useState('Ready.');
 
   const hasLLM = (nds: typeof nodes) =>
   nds.some((n) => {
@@ -212,7 +213,8 @@ function StudioInner() {
 const runOnce = useCallback(async () => {
   if (!sessionId) return;
   setRunning(true);
-  setLogs([]);
+  setLogs([{ type: 'run', message: 'started' }]);
+  setConsoleText('Running...');
 
   const graph = { nodes, edges };
   const wantsStream = hasLLM(nodes);
@@ -236,6 +238,8 @@ const runOnce = useCallback(async () => {
                 : n
             )
           );
+          if (evt.patch?.answer) setConsoleText(evt.patch.answer);
+          if (evt.patch?.result) setConsoleText(JSON.stringify(evt.patch.result));
         }
         if (evt.type === 'done') {
           setRunning(false);
@@ -258,14 +262,15 @@ const runOnce = useCallback(async () => {
   // If no LLM, we won't have a stream; finish UI now.
   if (!wantsStream) {
     setRunning(false);
-    // Optionally you could refresh node state from the response if you want
-    // (see server change that returns finalStates below)
     try {
       const j = await res.json();
       if (j?.finalStates) {
         setNodes((ns) =>
           ns.map((n) => ({ ...n, data: { ...n.data, state: { ...(n.data?.state || {}), ...(j.finalStates[n.id] || {}) } } }))
         );
+        const first = Object.values(j.finalStates)[0] as any;
+        if (first?.answer) setConsoleText(first.answer);
+        else if (first?.result) setConsoleText(JSON.stringify(first.result));
       }
     } catch {}
   }
@@ -461,10 +466,13 @@ const runOnce = useCallback(async () => {
           </div>
         </div>
       </div>
-      <div className="p-4">
-        <div className="rounded-2xl border p-3 bg-white"><div className="text-sm font-semibold mb-2">Console</div><pre className="text-[11px] whitespace-pre-wrap">Ready.</pre></div>
+        <div className="p-4">
+          <div className="rounded-2xl border p-3 bg-white">
+            <div className="text-sm font-semibold mb-2">Console</div>
+            <pre className="text-[11px] whitespace-pre-wrap">{consoleText}</pre>
+          </div>
+        </div>
       </div>
-    </div>
   );
 }
 
