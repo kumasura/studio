@@ -23,21 +23,17 @@ const TOOL_SCHEMAS: Record<string, any> = {
   weather: weatherTool,
 };
 
+// ... imports and setup unchanged ...
+
 export async function POST(req: Request) {
-  const { session_id, messages, node_id, tools = [] } = await req.json();
+  const { session_id, messages, node_id } = await req.json();
+  if (!session_id) {
+    return new Response(JSON.stringify({ error: 'invalid session' }), { status: 400 });
+  }
 
-  
-  // SSE stream out to the client via the existing /api/stream
-  // Here we only enqueue events so the UI sees them in the ReactFlow panel.
-  const encoder = new TextEncoder();
-
-  // Wrap the model with the tools requested for this run
-  const toolDefs = tools
-    .map((name: string) => TOOL_SCHEMAS[name])
-    .filter((t: any) => t);
   const modelWithTools = chat.bindTools(
-    toolDefs.map((t: any) => ({
-      type: "function" as const,
+    toolSchemas.map((t) => ({
+      type: 'function' as const,
       function: {
         name: t.name,
         description: t.description,
@@ -46,95 +42,87 @@ export async function POST(req: Request) {
     }))
   );
 
-  // Stream tokens into node.state
-  const chunks: string[] = [];
-  const stream = await modelWithTools.stream(messages, {
-    callbacks: [
-      {
-        handleLLMNewToken: async (token: string) => {
-          chunks.push(token);
-          await enqueue(session_id, {
-            type: "state_patch",
-            node: node_id,
-            patch: { status: "generating", partial: chunks.join("") },
-          });
-        },
-      },
-    ],
-  });
+  try {
+    // PHASE 1: plan (non-streaming)
+    const plan = await modelWithTools.invoke(messages);
+    const toolCalls = (plan?.tool_calls ?? []) as Array<{ name: string; args: Record<string, any> }>;
 
-  // Read the final message with potential tool-calls
-  const final = await modelWithTools.invoke(messages);
-  // If the model decided to call tools, LangChain exposes them in `tool_calls`
-  const toolCalls = (final?.tool_calls ?? []) as Array<{
-    name: string;
-    args: Record<string, any>;
-  }>;
+    // Represent plan as plain assistant content (avoid passing LC message instance back in)
+    const assistantPlan = {
+      role: 'assistant' as const,
+      content: typeof plan?.content === 'string' ? plan.content : JSON.stringify(plan?.content ?? ''),
+    };
 
-  // Execute each tool and append results to the transcript, then ask the model to produce a final answer
-  if (toolCalls.length) {
-    await enqueue(session_id, {
-      type: "state_patch",
-      node: node_id,
-      patch: { status: "tool_calling", toolCalls },
-    });
+    if (toolCalls.length) {
+      await enqueue(session_id, { type: 'state_patch', node: node_id, patch: { status: 'tool_calling', toolCalls } });
 
-    const toolResults: Array<{ name: string; result: any }> = [];
-    for (const call of toolCalls) {
-      let result: any;
-      if (call.name === "calc") {
-        result = { result: safeCalc(call.args?.expression ?? "0") };
-      } else if (call.name === "weather") {
-        const city = String(call.args?.city ?? "Delhi");
-        result = WEATHER[city] ?? { tempC: 28, condition: "Clear" };
-      } else {
-        result = { error: `Unknown tool ${call.name}` };
+      const toolResults: Array<{ name: string; result: any }> = [];
+      for (const call of toolCalls) {
+        let result: any;
+        if (call.name === 'calc') {
+          result = { result: safeCalc(String(call.args?.expression ?? '0')) };
+        } else if (call.name === 'weather') {
+          const city = String(call.args?.city ?? 'Delhi');
+          result = WEATHER[city] ?? { tempC: 28, condition: 'Clear' };
+        } else {
+          result = { error: `Unknown tool ${call.name}` };
+        }
+        toolResults.push({ name: call.name, result });
       }
-      toolResults.push({ name: call.name, result });
+
+      await enqueue(session_id, { type: 'state_patch', node: node_id, patch: { status: 'tool_results', toolResults } });
+
+      const toolMessages = toolResults.map((t) => ({
+        role: 'tool' as const,
+        name: t.name,
+        content: JSON.stringify(t.result),
+      }));
+
+      // PHASE 2: final streaming answer
+      const chunks: string[] = [];
+      const finalStream = await chat.stream([...messages, assistantPlan, ...toolMessages], {
+        callbacks: [
+          {
+            handleLLMNewToken: async (token: string) => {
+              chunks.push(token);
+              await enqueue(session_id, {
+                type: 'state_patch',
+                node: node_id,
+                patch: { status: 'answering', partial: chunks.join('') },
+              });
+            },
+          },
+        ],
+      });
+
+      for await (const _ of finalStream) {} // drain
+      await enqueue(session_id, { type: 'state_patch', node: node_id, patch: { status: 'done', answer: chunks.join('') } });
+    } else {
+      // No tools → stream direct answer
+      const chunks: string[] = [];
+      const stream = await chat.stream([...messages, assistantPlan], {
+        callbacks: [
+          {
+            handleLLMNewToken: async (token: string) => {
+              chunks.push(token);
+              await enqueue(session_id, {
+                type: 'state_patch',
+                node: node_id,
+                patch: { status: 'generating', partial: chunks.join('') },
+              });
+            },
+          },
+        ],
+      });
+
+      for await (const _ of stream) {} // drain
+      await enqueue(session_id, { type: 'state_patch', node: node_id, patch: { status: 'done', answer: chunks.join('') } });
     }
 
-    await enqueue(session_id, {
-      type: "state_patch",
-      node: node_id,
-      patch: { status: "tool_results", toolResults },
-    });
-
-    // Now let the model “see” tool results and produce a final message
-    const toolMessages = toolResults.map((t) => ({
-      role: "tool" as const,
-      name: t.name,
-      content: JSON.stringify(t.result),
-    }));
-
-    const finalStream = await chat.stream([...messages, final, ...toolMessages], {
-      callbacks: [
-        {
-          handleLLMNewToken: async (token: string) => {
-            chunks.push(token);
-            await enqueue(session_id, {
-              type: "state_patch",
-              node: node_id,
-              patch: { status: "answering", partial: chunks.join("") },
-            });
-          },
-        },
-      ],
-    });
-
-    const last = await modelWithTools.invoke(messages);
-    await enqueue(session_id, {
-      type: "state_patch",
-      node: node_id,
-      patch: { status: "done", answer: last?.content ?? chunks.join("") },
-    });
-  } else {
-    // No tool calls; just return the streamed text
-    await enqueue(session_id, {
-      type: "state_patch",
-      node: node_id,
-      patch: { status: "done", answer: final?.content ?? chunks.join("") },
-    });
+    return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } });
+  } catch (err: any) {
+    await enqueue(session_id, { type: 'state_patch', node: node_id, patch: { status: 'error', error: String(err?.message || err) } });
+    return new Response(JSON.stringify({ ok: false, error: String(err?.message || err) }), { status: 500 });
   }
-
-  return new Response(JSON.stringify({ ok: true }), { headers: { "content-type": "application/json" } });
 }
+
