@@ -204,24 +204,11 @@ function StudioInner() {
 
   const runOnce = useCallback(async () => {
   if (!sessionId) return;
-
   setRunning(true);
   setLogs([]);
 
-  // snapshot current graph
-  const graph = { nodes, edges };
-
-  // start the run (server executes and enqueues events)
-  await fetch('/api/runs', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session_id: sessionId, graph }),
-  });
-
-  // close any previous stream
+  // 1) Open the stream first
   if (esRef.current) esRef.current.close();
-
-  // open SSE stream
   const es = new EventSource(`/api/stream?session_id=${sessionId}`);
   esRef.current = es;
 
@@ -230,7 +217,6 @@ function StudioInner() {
       const evt = JSON.parse(e.data);
       setLogs((l) => [...l, evt]);
 
-      // patch node state
       if (evt.type === 'state_patch' && evt.node) {
         setNodes((ns) =>
           ns.map((n) =>
@@ -240,32 +226,23 @@ function StudioInner() {
           )
         );
       }
-
-      if (evt.type === 'node_enter' && evt.node) {
-        // optional: mark entry
-        setNodes((ns) =>
-          ns.map((n) =>
-            n.id === evt.node
-              ? { ...n, data: { ...n.data, state: { ...(n.data?.state || {}), enteredAt: Date.now() } } }
-              : n
-          )
-        );
-      }
-
       if (evt.type === 'done') {
         setRunning(false);
         es.close();
       }
-    } catch {
-      // ignore bad frames
-    }
+    } catch {}
   };
+  es.onerror = () => { setRunning(false); es.close(); };
 
-  es.onerror = () => {
-    setRunning(false);
-    es.close();
-  };
+  // 2) Then trigger the run (server will enqueue while stream is open)
+  const graph = { nodes, edges };
+  await fetch('/api/runs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, graph }),
+  });
 }, [sessionId, nodes, edges, setNodes]);
+
 
   useEffect(() => {
   return () => { if (esRef.current) esRef.current.close(); };
