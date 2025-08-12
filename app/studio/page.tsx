@@ -216,6 +216,9 @@ function StudioInner() {
     setRunning(false);
   }, [setNodes]);
 
+  const selectedNode = nodes.find((n) => n.id === selectedNodeId)
+  const updateSelected = (patch: any) => { if (!selectedNode) return; setNodes((ns) => ns.map((n) => (n.id === selectedNode.id ? { ...n, data: { ...n.data, ...patch } } : n))) }
+
   return (
     <div className="h-screen w-full bg-gradient-to-b from-zinc-50 to-white">
       <div className="p-4 flex items-center justify-between">
@@ -351,32 +354,32 @@ function StudioInner() {
         <div className="col-span-3 h-[75vh] grid grid-rows-2 gap-4">
           <div className="rounded-2xl border p-3 bg-white overflow-auto">
             <div className="text-sm font-semibold mb-2">Inspector</div>
-            {selectedNodeId ? (
+            {selectedNode ? (
               <div className="space-y-2 text-sm">
-                <div>ID: <code>{selectedNodeId.id}</code></div>
-                <div className="flex items-center gap-2"><label className="w-24">Label</label><input className="border rounded px-2 py-1 w-full" value={selectedNodeId.data?.label || ''} onChange={(e) => updateSelected({ label: e.target.value })} /></div>
-                {selectedNodeId.data?.label === 'Tool' && (
+                <div>ID: <code>{selectedNode.id}</code></div>
+                <div className="flex items-center gap-2"><label className="w-24">Label</label><input className="border rounded px-2 py-1 w-full" value={selectedNode.data?.label || ''} onChange={(e) => updateSelected({ label: e.target.value })} /></div>
+                {selectedNode.data?.label === 'Tool' && (
                   <>
                     <div className="flex items-center gap-2"><label className="w-24">Tool</label>
-                      <select className="border rounded px-2 py-1 w-full" value={selectedNodeId.data?.tool || 'calc'} onChange={(e) => updateSelected({ tool: e.target.value })}>
+                      <select className="border rounded px-2 py-1 w-full" value={selectedNode.data?.tool || 'calc'} onChange={(e) => updateSelected({ tool: e.target.value })}>
                         <option value="calc">calc</option>
                         <option value="weather">weather</option>
                       </select>
                     </div>
-                    {(selectedNodeId.data?.tool || 'calc') === 'calc' && (
+                    {(selectedNode.data?.tool || 'calc') === 'calc' && (
                       <div className="flex items-center gap-2"><label className="w-24">Expression</label>
-                        <input className="border rounded px-2 py-1 w-full" value={selectedNodeId.data?.params?.expression || ''} onChange={(e) => updateSelected({ params: { ...(selectedNodeId.data?.params || {}), expression: e.target.value } })} />
+                        <input className="border rounded px-2 py-1 w-full" value={selectedNode.data?.params?.expression || ''} onChange={(e) => updateSelected({ params: { ...(selectedNode.data?.params || {}), expression: e.target.value } })} />
                       </div>
                     )}
-                    {selectedNodeId.data?.tool === 'weather' && (
+                    {selectedNode.data?.tool === 'weather' && (
                       <div className="flex items-center gap-2"><label className="w-24">City</label>
-                        <input className="border rounded px-2 py-1 w-full" value={selectedNodeId.data?.params?.city || ''} onChange={(e) => updateSelected({ params: { ...(selectedNodeId.data?.params || {}), city: e.target.value } })} />
+                        <input className="border rounded px-2 py-1 w-full" value={selectedNode.data?.params?.city || ''} onChange={(e) => updateSelected({ params: { ...(selectedNode.data?.params || {}), city: e.target.value } })} />
                       </div>
                     )}
                   </>
                 )}
                 <div className="text-xs text-zinc-500">State:</div>
-                <pre className="text-[11px] bg-zinc-50 p-2 rounded">{JSON.stringify(selectedNodeId.data?.state || {}, null, 2)}</pre>
+                <pre className="text-[11px] bg-zinc-50 p-2 rounded">{JSON.stringify(selectedNode.data?.state || {}, null, 2)}</pre>
               </div>
             ) : (<div className="text-sm text-zinc-500">Select a node to edit.</div>)}
           
