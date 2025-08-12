@@ -13,15 +13,24 @@ import ReactFlow, {
   Handle,
   Position,
   Connection,
-  Edge
+  Edge,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { motion } from 'framer-motion'
 
+// Shared node data type to keep TS happy when we mutate `data.state`
+type NodeData = {
+  label?: string
+  subtitle?: string
+  state?: Record<string, any>
+  tool?: 'calc' | 'weather' | string
+  params?: Record<string, any>
+}
+
 // ===============
 // Nodes with ports
 // ===============
-function StageNode({ data }: any) {
+function StageNode({ data }: { data: NodeData }) {
   return (
     <div className="relative rounded-2xl shadow bg-white border border-zinc-200 p-3 w-64">
       {/* IN port */}
@@ -42,7 +51,7 @@ function StageNode({ data }: any) {
   )
 }
 
-function RouterNode({ data }: any) {
+function RouterNode({ data }: { data: NodeData }) {
   return (
     <div className="relative rounded-2xl shadow bg-white border border-zinc-200 p-3 w-64">
       {/* IN port */}
@@ -60,7 +69,7 @@ const nodeTypes = { stage: StageNode, router: RouterNode }
 
 function StudioInner() {
   // Initial graph
-  const [nodes, setNodes, onNodesChange] = useNodesState([
+  const [nodes, setNodes, onNodesChange] = useNodesState<NodeData>([
     { id: 'input', type: 'stage', position: { x: 0, y: 80 }, data: { label: 'Input', subtitle: 'Human / System', state: { query: 'Hello' } } },
     { id: 'planner', type: 'stage', position: { x: 300, y: 80 }, data: { label: 'Planner', subtitle: 'LLM (policy)' } },
     { id: 'router1', type: 'router', position: { x: 560, y: 80 }, data: {} },
@@ -133,7 +142,7 @@ function StudioInner() {
   return (
     <div className="h-screen w-full bg-gradient-to-b from-zinc-50 to-white">
       <div className="p-4 flex items-center justify-between">
-        <div className="text-xl font-bold">PRIQ Agentic Studio</div>
+        <div className="text-xl font-bold">Studio (Vercel)</div>
         <div className="flex items-center gap-2">
           <button className="px-3 py-2 rounded-2xl shadow bg-black text-white disabled:opacity-50" onClick={runOnce} disabled={running}>{running ? 'Running…' : 'Run'}</button>
           <button className="px-3 py-2 rounded-2xl border" onClick={() => setLogs([])}>Reset</button>
