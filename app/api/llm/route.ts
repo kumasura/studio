@@ -1,7 +1,7 @@
 export const runtime = "edge";
 
 import { toolSchemas, chat } from "@/lib/llm";
-import { SESSIONS, enqueue } from "@/lib/runtime";
+import { enqueue } from "@/lib/runtime";
 import { zodToJsonSchema } from "zod-to-json-schema"; 
 
 // Very small safe evaluators (same as your runtime tools)
@@ -21,10 +21,7 @@ const WEATHER: Record<string, any> = {
 export async function POST(req: Request) {
   const { session_id, messages, node_id } = await req.json();
 
-  if (!session_id || !SESSIONS.has(session_id)) {
-    return new Response(JSON.stringify({ error: "invalid session" }), { status: 400 });
-  }
-
+  
   // SSE stream out to the client via the existing /api/stream
   // Here we only enqueue events so the UI sees them in the ReactFlow panel.
   const encoder = new TextEncoder();
