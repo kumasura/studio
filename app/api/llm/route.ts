@@ -59,7 +59,7 @@ export async function POST(req: Request) {
   });
 
   // Read the final message with potential tool-calls
-  const final = await stream.finalMessage();
+  const plan = await modelWithTools.invoke(messages);
   // If the model decided to call tools, LangChain exposes them in `tool_calls`
   const toolCalls = (final?.tool_calls ?? []) as Array<{
     name: string;
