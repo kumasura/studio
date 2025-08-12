@@ -198,77 +198,77 @@ function StudioInner() {
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedEdgeId, selectedNodeId, setEdges, setNodes]);
 
-  // Fake run to show state updates
-  const [logs, setLogs] = useState<any[]>([]);
-  const [running, setRunning] = useState(false);
-
-  const hasLLM = (nds: typeof nodes) =>
-  nds.some((n) => {
-    const label = (n.data?.label || '').toString().toLowerCase();
-    const tool = (n.data?.tool || '').toString().toLowerCase();
-    return label === 'llm' || tool === 'llm';
-  });
+// Fake run to show state updates
+const [logs, setLogs] = useState<any[]>([]);
+const [running, setRunning] = useState(false);
+const [consoleText, setConsoleText] = useState('Ready.');
 
 const runOnce = useCallback(async () => {
   if (!sessionId) return;
   setRunning(true);
-  setLogs([]);
+  setLogs([{ type: 'run', message: 'started' }]);
+  setConsoleText('Running...');
 
   const graph = { nodes, edges };
-  const wantsStream = hasLLM(nodes);
 
-  // Open SSE only when LLM is present
-  if (wantsStream) {
-    if (esRef.current) esRef.current.close();
-    const es = new EventSource(`/api/stream?session_id=${sessionId}`);
-    esRef.current = es;
+  if (esRef.current) esRef.current.close();
+  const es = new EventSource(`/api/stream?session_id=${sessionId}`);
+  esRef.current = es;
 
-    es.onmessage = (e) => {
-      try {
-        const evt = JSON.parse(e.data);
-        setLogs((l) => [...l, evt]);
+  es.onmessage = (e) => {
+    try {
+      const evt = JSON.parse(e.data);
+      setLogs((l) => [...l, evt]);
 
-        if (evt.type === 'state_patch' && evt.node) {
-          setNodes((ns) =>
-            ns.map((n) =>
-              n.id === evt.node
-                ? { ...n, data: { ...n.data, state: { ...(n.data?.state || {}), ...(evt.patch || {}) } } }
-                : n
-            )
+      if (evt.type === 'state_patch' && evt.node) {
+        setNodes((ns) =>
+          ns.map((n) =>
+            n.id === evt.node
+              ? { ...n, data: { ...n.data, state: { ...(n.data?.state || {}), ...(evt.patch || {}) } } }
+              : n
+          )
+        );
+        if (evt.patch?.answer) setConsoleText(evt.patch.answer);
+        else if (evt.patch?.result) setConsoleText(JSON.stringify(evt.patch.result));
+        else if (evt.patch?.output)
+          setConsoleText(
+            typeof evt.patch.output === 'string'
+              ? evt.patch.output
+              : JSON.stringify(evt.patch.output)
           );
-        }
-        if (evt.type === 'done') {
-          setRunning(false);
-          es.close();
-        }
-      } catch {}
-    };
-    es.onerror = () => { setRunning(false); es.close(); };
-  }
+        else if (evt.patch?.query) setConsoleText(String(evt.patch.query));
+      }
+      if (evt.type === 'done') {
+        setRunning(false);
+        es.close();
+        setConsoleText((t) => (t && t !== 'Running...' ? `${t}\nComplete.` : 'Complete.'));
+        setTimeout(() => setConsoleText('Ready.'), 1000);
+      }
+    } catch {}
+  };
+  es.onerror = () => {
+    setRunning(false);
+    es.close();
+    setConsoleText('Ready.');
+  };
 
-  // Trigger run; /api/runs will execute synchronously (await) and
-  // - stream via /api/llm only for LLM nodes
-  // - run tools synchronously and patch state immediately
   const res = await fetch('/api/runs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ session_id: sessionId, graph }),
   });
 
-  // If no LLM, we won't have a stream; finish UI now.
-  if (!wantsStream) {
-    setRunning(false);
-    // Optionally you could refresh node state from the response if you want
-    // (see server change that returns finalStates below)
-    try {
-      const j = await res.json();
-      if (j?.finalStates) {
-        setNodes((ns) =>
-          ns.map((n) => ({ ...n, data: { ...n.data, state: { ...(n.data?.state || {}), ...(j.finalStates[n.id] || {}) } } }))
-        );
-      }
-    } catch {}
-  }
+  try {
+    const j = await res.json();
+    if (j?.finalStates) {
+      setNodes((ns) =>
+        ns.map((n) => ({
+          ...n,
+          data: { ...n.data, state: { ...(n.data?.state || {}), ...(j.finalStates[n.id] || {}) } },
+        }))
+      );
+    }
+  } catch {}
 }, [sessionId, nodes, edges, setNodes]);
 
 
@@ -461,10 +461,13 @@ const runOnce = useCallback(async () => {
           </div>
         </div>
       </div>
-      <div className="p-4">
-        <div className="rounded-2xl border p-3 bg-white"><div className="text-sm font-semibold mb-2">Console</div><pre className="text-[11px] whitespace-pre-wrap">Ready.</pre></div>
+        <div className="p-4">
+          <div className="rounded-2xl border p-3 bg-white">
+            <div className="text-sm font-semibold mb-2">Console</div>
+            <pre className="text-[11px] whitespace-pre-wrap">{consoleText}</pre>
+          </div>
+        </div>
       </div>
-    </div>
   );
 }
 
