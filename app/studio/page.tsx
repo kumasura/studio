@@ -250,6 +250,16 @@ function StudioInner() {
               <li
                 draggable
                 onDragStart={(e) =>
+                  onDragStart(e as any, { type: 'stage', data: { label: 'LLM', subtitle: 'Model call', state: { query: 'What tools do I need to answer: weather in Delhi and 2+3*4?' } } })
+                }
+                className="cursor-move px-2 py-1 rounded-xl border"
+              >
+                LLM (ChatOpenAI)
+              </li>
+
+              <li
+                draggable
+                onDragStart={(e) =>
                   onDragStart(e as any, {
                     type: 'stage',
                     data: { label: 'Tool', subtitle: 'Function call', tool: 'calc', params: { expression: 'sin(PI/4)**2' } },
