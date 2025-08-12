@@ -99,6 +99,8 @@ function getOrigin() {
 }
 
 export async function executeGraph(sessionId: string, graph: any) {
+  await enqueue(sessionId, { type: 'state_patch', node: 'sys', patch: { startedAt: Date.now() } });
+
   const nodes: Record<string, any> = Object.fromEntries((graph?.nodes || []).map((n: any) => [n.id, n]));
   const edges: any[] = graph?.edges || [];
 
@@ -164,13 +166,26 @@ export async function executeGraph(sessionId: string, graph: any) {
       });
 
       const origin = getOrigin();
-      await fetch(`${origin}/api/llm`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, node_id: nid, messages, tools: connectedTools }),
-      });
 
-      finalStates[nid] = { status: 'started' };
+      // Abort after N seconds if the LLM proxy gets stuck
+      const abort = new AbortController();
+      const timeout = setTimeout(() => abort.abort('llm-timeout'), 90_000);
+      
+      try {
+        await fetch(`${origin}/api/llm`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId, node_id: nid, messages }),
+          signal: abort.signal,
+        });
+      } catch (e) {
+        await enqueue(sessionId, { type: 'state_patch', node: nid, patch: { status: 'error', error: String((e as any)?.message || e) } });
+      } finally {
+        clearTimeout(timeout);
+      }
+      
+      finalStates[nid] = { status: 'started' }; // executor continues; stream will have posted the final answer or the error
+
     } else if (tool && TOOLS[tool]) {
       // Regular tool: run synchronously and patch immediately
       await enqueue(sessionId, { type: 'state_patch', node: nid, patch: { status: 'running', tool } });
