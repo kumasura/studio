@@ -17,7 +17,8 @@
     "langchain": "^0.2.13",
     "@langchain/openai": "latest",
     "zod": "^3.23.8",
-    "zod-to-json-schema": "latest"
+    "zod-to-json-schema": "latest",
+    "@vercel/kv": "latest"
   },
   "devDependencies": {
     "@types/node": "20.12.7",
