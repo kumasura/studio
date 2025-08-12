@@ -1,3 +1,4 @@
+import '@/styles/globals.css';
 export const metadata = { title: 'Studio on Vercel', description: 'LangGraph Studio–like UI (Next.js only)' };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
