@@ -92,7 +92,6 @@ function getOrigin() {
   return 'http://localhost:3000';
 }
 
-// --- Graph executor (same logic as before; unchanged) ---
 export async function executeGraph(sessionId: string, graph: any) {
   const nodes: Record<string, any> = Object.fromEntries((graph?.nodes || []).map((n: any) => [n.id, n]));
   const edges: any[] = graph?.edges || [];
@@ -103,6 +102,8 @@ export async function executeGraph(sessionId: string, graph: any) {
 
   const frontier = Object.keys(nodes).filter((nid) => (incoming[nid] ?? 0) === 0);
   const nexts = (id: string) => edges.filter((e) => e.source === id).map((e) => e.target);
+
+  const finalStates: Record<string, any> = {};
 
   while (frontier.length) {
     const nid = frontier.shift()!;
@@ -116,7 +117,9 @@ export async function executeGraph(sessionId: string, graph: any) {
     const isLLM = label.toLowerCase() === 'llm' || tool === 'llm';
 
     if (isLLM) {
-      const userQuery = (node?.data?.state?.query as string) ?? 'Plan the next steps and call tools if needed.';
+      // LLM: stream via /api/llm
+      const userQuery =
+        (node?.data?.state?.query as string) ?? 'Plan the next steps and call tools if needed.';
       const messages = [
         { role: 'system', content: 'You are a helpful planner that may call tools if needed.' },
         { role: 'user', content: userQuery },
@@ -125,27 +128,35 @@ export async function executeGraph(sessionId: string, graph: any) {
       await enqueue(sessionId, { type: 'state_patch', node: nid, patch: { status: 'planning' } });
 
       const origin = getOrigin();
+      // Let /api/llm push streaming updates; we'll just mark a placeholder final here
       await fetch(`${origin}/api/llm`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, node_id: nid, messages }),
       });
+
+      // we can't know the final answer synchronously; leave it to the stream
+      finalStates[nid] = { status: 'started' };
     } else if (tool && TOOLS[tool]) {
+      // Regular tool: run synchronously and patch immediately
       await enqueue(sessionId, { type: 'state_patch', node: nid, patch: { status: 'running', tool } });
       try {
         const result = await TOOLS[tool](params);
-        await enqueue(sessionId, { type: 'state_patch', node: nid, patch: { status: 'done', result } });
+        const patch = { status: 'done', result };
+        await enqueue(sessionId, { type: 'state_patch', node: nid, patch });
+        finalStates[nid] = patch;
       } catch (e: any) {
-        await enqueue(sessionId, {
-          type: 'state_patch',
-          node: nid,
-          patch: { status: 'error', error: String(e?.message || e) },
-        });
+        const patch = { status: 'error', error: String(e?.message || e) };
+        await enqueue(sessionId, { type: 'state_patch', node: nid, patch });
+        finalStates[nid] = patch;
       }
     } else {
-      await enqueue(sessionId, { type: 'state_patch', node: nid, patch: { status: 'skipped' } });
+      const patch = { status: 'skipped' };
+      await enqueue(sessionId, { type: 'state_patch', node: nid, patch });
+      finalStates[nid] = patch;
     }
 
+    // advance graph
     for (const t of nexts(nid)) {
       incoming[t] -= 1;
       if (incoming[t] === 0) frontier.push(t);
@@ -153,4 +164,5 @@ export async function executeGraph(sessionId: string, graph: any) {
   }
 
   await enqueue(sessionId, { type: 'done', metrics: { tokens: 0, cost: 0 } });
+  return finalStates; // <- used by /api/runs when no LLM stream is open
 }
