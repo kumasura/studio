@@ -6,7 +6,7 @@ import { z } from "zod";
 // Use a small, fast model for tool-routing; swap for your preferred one.
 export const chat = new ChatOpenAI({
     apiKey: "sk-anything", // not used but required by interface
-    baseUrl: "https://suraj-kumar-2013--chatbot-fastapi-app.modal.run/v1/",
+    baseURL: "https://suraj-kumar-2013--chatbot-fastapi-app.modal.run/v1/",
     model: "local-llama",
     temperature: 0.7
 });
