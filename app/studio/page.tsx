@@ -98,6 +98,20 @@ const nodeTypes = { stage: StageNode, router: RouterNode };
 
 // -------- Page --------
 function StudioInner() {
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const esRef = useRef<EventSource | null>(null);
+  
+  // create a session once
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const r = await fetch('/api/sessions', { method: 'POST' });
+      const j = await r.json();
+      if (mounted) setSessionId(j.session_id);
+    })();
+    return () => { mounted = false; };
+  }, []);
+
   // Graph
   const [nodes, setNodes, onNodesChange] = useNodesState<NodeData>([
     {
@@ -189,32 +203,74 @@ function StudioInner() {
   const [running, setRunning] = useState(false);
 
   const runOnce = useCallback(async () => {
-    setRunning(true);
-    setLogs([]);
-    const fake = [
-      { type: 'node_enter', node: 'planner', message: 'Planning…' },
-      { type: 'state_patch', node: 'tool1', patch: { status: 'running', tool: 'calc' } },
-      { type: 'state_patch', node: 'tool1', patch: { status: 'done', result: { result: 14 } } },
-      { type: 'state_patch', node: 'tool2', patch: { status: 'running', tool: 'weather' } },
-      { type: 'state_patch', node: 'tool2', patch: { status: 'done', result: { tempC: 32, condition: 'Cloudy' } } },
-      { type: 'done', metrics: { tokens: 0, cost: 0 } },
-    ] as const;
+  if (!sessionId) return;
 
-    for (const evt of fake) {
-      await new Promise((r) => setTimeout(r, 400));
-      setLogs((l) => [...l, evt as any]);
-      if (evt.type === 'state_patch') {
+  setRunning(true);
+  setLogs([]);
+
+  // snapshot current graph
+  const graph = { nodes, edges };
+
+  // start the run (server executes and enqueues events)
+  await fetch('/api/runs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, graph }),
+  });
+
+  // close any previous stream
+  if (esRef.current) esRef.current.close();
+
+  // open SSE stream
+  const es = new EventSource(`/api/stream?session_id=${sessionId}`);
+  esRef.current = es;
+
+  es.onmessage = (e) => {
+    try {
+      const evt = JSON.parse(e.data);
+      setLogs((l) => [...l, evt]);
+
+      // patch node state
+      if (evt.type === 'state_patch' && evt.node) {
         setNodes((ns) =>
           ns.map((n) =>
-            n.id === (evt as any).node
-              ? { ...n, data: { ...n.data, state: { ...(n.data?.state || {}), ...((evt as any).patch || {}) } } }
+            n.id === evt.node
+              ? { ...n, data: { ...n.data, state: { ...(n.data?.state || {}), ...(evt.patch || {}) } } }
               : n
           )
         );
       }
+
+      if (evt.type === 'node_enter' && evt.node) {
+        // optional: mark entry
+        setNodes((ns) =>
+          ns.map((n) =>
+            n.id === evt.node
+              ? { ...n, data: { ...n.data, state: { ...(n.data?.state || {}), enteredAt: Date.now() } } }
+              : n
+          )
+        );
+      }
+
+      if (evt.type === 'done') {
+        setRunning(false);
+        es.close();
+      }
+    } catch {
+      // ignore bad frames
     }
+  };
+
+  es.onerror = () => {
     setRunning(false);
-  }, [setNodes]);
+    es.close();
+  };
+}, [sessionId, nodes, edges, setNodes]);
+
+  useEffect(() => {
+  return () => { if (esRef.current) esRef.current.close(); };
+}, []);
+
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)
   const updateSelected = (patch: any) => { if (!selectedNode) return; setNodes((ns) => ns.map((n) => (n.id === selectedNode.id ? { ...n, data: { ...n.data, ...patch } } : n))) }
