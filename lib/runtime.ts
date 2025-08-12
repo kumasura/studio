@@ -175,7 +175,7 @@ export async function executeGraph(sessionId: string, graph: any) {
         await fetch(`${origin}/api/llm`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId, node_id: nid, messages }),
+          body: JSON.stringify({ session_id: sessionId, node_id: nid, messages, tools: connectedTools }),
           signal: abort.signal,
         });
       } catch (e) {
