@@ -370,9 +370,6 @@ function StudioInner() {
           </div>
         </div>
       </div>
-    <div className="p-4">
-        <div className="rounded-2xl border p-3 bg-white"><div className="text-sm font-semibold mb-2">Console</div><pre className="text-[11px] whitespace-pre-wrap">Ready.</pre></div>
-      </div>
     </div>
   );
 }
