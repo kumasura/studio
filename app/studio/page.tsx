@@ -351,7 +351,9 @@ function StudioInner() {
         <div className="col-span-3 h-[75vh] grid grid-rows-2 gap-4">
           <div className="rounded-2xl border p-3 bg-white overflow-auto">
             <div className="text-sm font-semibold mb-2">Inspector</div>
-            <div className="text-sm text-zinc-500">Select a node to edit.</div>
+            <pre className="text-[11px] bg-zinc-50 p-2 rounded">{JSON.stringify(selectedNodeId.data?.state || {}, null, 2)}</pre>
+              </div>
+            ) : (<div className="text-sm text-zinc-500">Select a node to edit.</div>)}
           </div>
 
           <div className="rounded-2xl border p-3 bg-white overflow-auto">
@@ -367,6 +369,9 @@ function StudioInner() {
             </ul>
           </div>
         </div>
+      </div>
+    <div className="p-4">
+        <div className="rounded-2xl border p-3 bg-white"><div className="text-sm font-semibold mb-2">Console</div><pre className="text-[11px] whitespace-pre-wrap">Ready.</pre></div>
       </div>
     </div>
   );
