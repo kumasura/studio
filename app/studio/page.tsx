@@ -95,7 +95,7 @@ function StudioInner() {
   return (
     <div className="h-screen w-full bg-gradient-to-b from-zinc-50 to-white">
       <div className="p-4 flex items-center justify-between">
-        <div className="text-xl font-bold">Studio (Vercel)</div>
+        <div className="text-xl font-bold">PRIQ Agentic Studio</div>
         <div className="flex items-center gap-2">
           <button className="px-3 py-2 rounded-2xl shadow bg-black text-white disabled:opacity-50" onClick={runOnce} disabled={running || !sessionId}>{running ? 'Running…' : 'Run'}</button>
           <button className="px-3 py-2 rounded-2xl border" onClick={() => { setLogs([]); setState({}) }}>Reset</button>
