@@ -2,6 +2,7 @@ export const runtime = "edge";
 
 import { toolSchemas, chat } from "@/lib/llm";
 import { SESSIONS, enqueue } from "@/lib/runtime";
+import { zodToJsonSchema } from "zod-to-json-schema"; 
 
 // Very small safe evaluators (same as your runtime tools)
 function safeCalc(expression: string) {
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
       function: {
         name: t.name,
         description: t.description,
-        parameters: t.schema.openAPISchema(), // LangChain zod -> JSON schema
+        parameters: zodToJsonSchema(t.schema, t.name) as any,
       },
     }))
   );
