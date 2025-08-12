@@ -1,8 +1,8 @@
 export const runtime = "edge";
 
-import { toolSchemas, chat } from "@/lib/llm";
+import { calcTool, weatherTool, chat } from "@/lib/llm";
 import { enqueue } from "@/lib/runtime";
-import { zodToJsonSchema } from "zod-to-json-schema"; 
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 // Very small safe evaluators (same as your runtime tools)
 function safeCalc(expression: string) {
@@ -18,17 +18,24 @@ const WEATHER: Record<string, any> = {
   Bengaluru: { tempC: 24, condition: "Light Rain" },
 };
 
+const TOOL_SCHEMAS: Record<string, any> = {
+  calc: calcTool,
+  weather: weatherTool,
+};
+
 export async function POST(req: Request) {
-  const { session_id, messages, node_id } = await req.json();
+  const { session_id, messages, node_id, tools = [] } = await req.json();
 
   
   // SSE stream out to the client via the existing /api/stream
   // Here we only enqueue events so the UI sees them in the ReactFlow panel.
-  const encoder = new TextEncoder();
 
-  // Wrap the model with tools enabled
+  // Wrap the model with the tools requested for this run
+  const toolDefs = tools
+    .map((name: string) => TOOL_SCHEMAS[name])
+    .filter((t: any) => t);
   const modelWithTools = chat.bindTools(
-    toolSchemas.map((t) => ({
+    toolDefs.map((t: any) => ({
       type: "function" as const,
       function: {
         name: t.name,
@@ -55,9 +62,8 @@ export async function POST(req: Request) {
     ],
   });
 
-  // Read the final message with potential tool-calls
-  const final = await modelWithTools.invoke(messages);
-  // If the model decided to call tools, LangChain exposes them in `tool_calls`
+  // Read the final message with potential tool-calls from the stream
+  const final = await (stream as any).finalMessage();
   const toolCalls = (final?.tool_calls ?? []) as Array<{
     name: string;
     args: Record<string, any>;
@@ -98,7 +104,7 @@ export async function POST(req: Request) {
       content: JSON.stringify(t.result),
     }));
 
-    const finalStream = await chat.stream([...messages, final, ...toolMessages], {
+    const followStream = await chat.stream([...messages, final, ...toolMessages], {
       callbacks: [
         {
           handleLLMNewToken: async (token: string) => {
@@ -113,20 +119,26 @@ export async function POST(req: Request) {
       ],
     });
 
-    const last = await modelWithTools.invoke(messages);
+    const last = await (followStream as any).finalMessage();
+    const answer = last?.content ?? chunks.join("");
     await enqueue(session_id, {
       type: "state_patch",
       node: node_id,
-      patch: { status: "done", answer: last?.content ?? chunks.join("") },
+      patch: { status: "done", answer },
+    });
+    return new Response(JSON.stringify({ ok: true, answer }), {
+      headers: { "content-type": "application/json" },
     });
   } else {
     // No tool calls; just return the streamed text
+    const answer = final?.content ?? chunks.join("");
     await enqueue(session_id, {
       type: "state_patch",
       node: node_id,
-      patch: { status: "done", answer: final?.content ?? chunks.join("") },
+      patch: { status: "done", answer },
+    });
+    return new Response(JSON.stringify({ ok: true, answer }), {
+      headers: { "content-type": "application/json" },
     });
   }
-
-  return new Response(JSON.stringify({ ok: true }), { headers: { "content-type": "application/json" } });
 }
