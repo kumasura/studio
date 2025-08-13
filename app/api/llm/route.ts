@@ -79,7 +79,6 @@ export async function POST(req: Request) {
       // PHASE 2: final streaming answer
       const chunks: string[] = [];
       const finalStream = await chat.stream([...messages, assistantPlan, ...toolMessages], {
-        streaming: true, 
         callbacks: [
           {
             handleLLMNewToken: async (token: string) => {
