@@ -117,7 +117,7 @@ export async function POST(req: Request) {
       await enqueue(session_id, { type: "state_patch", node: node_id, patch: { status: "done", answer: chunks.join("") } });
     }
 
-    return new Response(JSON.stringify({ ok: true }), {
+    return new Response(JSON.stringify({ ok: true , answer:chunks}), {
       headers: { "content-type": "application/json" },
     });
   } catch (err: any) {
