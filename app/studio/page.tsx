@@ -262,6 +262,7 @@ const runOnce = useCallback(async () => {
   // If no LLM, we won't have a stream; finish UI now.
   if (!wantsStream) {
     setRunning(false);
+    setConsoleText('Running...');
     try {
       const j = await res.json();
       if (j?.finalStates) {
