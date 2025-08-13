@@ -112,12 +112,14 @@ export async function POST(req: Request) {
           },
         ],
       });
-
+      console.log(chunks)
+      console.log(node_id)
+      
       for await (const _ of stream) {}
       await enqueue(session_id, { type: "state_patch", node: node_id, patch: { status: "done", answer: chunks.join("") } });
     }
 
-    return new Response(JSON.stringify({ ok: true , answer:chunks}), {
+    return new Response(JSON.stringify({ ok: true }), {
       headers: { "content-type": "application/json" },
     });
   } catch (err: any) {
