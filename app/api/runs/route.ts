@@ -1,5 +1,5 @@
 // app/api/runs/route.ts
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 import { executeGraph } from '@/lib/runtime';
 
 export async function POST(req: Request) {

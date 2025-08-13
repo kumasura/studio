@@ -200,9 +200,27 @@ export async function executeGraph(sessionId: string, graph: any) {
         finalStates[nid] = patch;
       }
     } else {
-      const patch = { status: 'skipped' };
-      await enqueue(sessionId, { type: 'state_patch', node: nid, patch });
-      finalStates[nid] = patch;
+      const label = (node?.data?.label || '').toString().toLowerCase();
+      if (label === 'output') {
+        const upstream = edges.filter((e) => e.target === nid).map((e) => e.source);
+        const out: any = { status: 'done' };
+        for (const uid of upstream) {
+          const uState = finalStates[uid] || {};
+          if (uState.answer) {
+            out.answer = uState.answer;
+            break;
+          }
+          if (uState.result && out.result === undefined) {
+            out.result = uState.result;
+          }
+        }
+        await enqueue(sessionId, { type: 'state_patch', node: nid, patch: out });
+        finalStates[nid] = out;
+      } else {
+        const patch = { status: 'skipped' };
+        await enqueue(sessionId, { type: 'state_patch', node: nid, patch });
+        finalStates[nid] = patch;
+      }
     }
 
     // advance graph

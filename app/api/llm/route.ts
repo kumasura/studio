@@ -1,4 +1,4 @@
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 import { chat, calcTool, weatherTool } from "@/lib/llm";
 import { enqueue } from "@/lib/runtime";
