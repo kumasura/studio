@@ -381,7 +381,9 @@ function TransformerNode({ id, data }: NodeProps<TransformerData>) {
   return (
     <div className="rounded-2xl border bg-white shadow p-3 w-[420px]">
       <div className="font-semibold">Transformer (Python map)</div>
-      <div className="text-xs text-gray-500 mb-2">Use f(*xs) -> value</div>
+      <div className="text-xs text-gray-500 mb-2">
+        Use f(*xs) -&gt; value
+      </div>
 
       {/* Input handles: one per incoming column */}
       <div className="flex flex-wrap gap-1 mb-2">
