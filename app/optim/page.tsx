@@ -21,6 +21,7 @@ import ReactFlow, {
   addEdge,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   Handle,
   Position,
   NodeProps,
@@ -199,6 +200,7 @@ function DataUploadNode({ id, data }: NodeProps<DataUploadData>) {
   const [delimiter, setDelimiter] = useState<string>(data.delimiter ?? ",");
   const [status, setStatus] = useState<string>("");
   const [stream, setStream] = useState<StreamName>(data.stream || "main");
+  const { deleteElements } = useReactFlow();
 
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -226,7 +228,13 @@ function DataUploadNode({ id, data }: NodeProps<DataUploadData>) {
   };
 
   return (
-    <div className="rounded-2xl border bg-white shadow p-3 w-[340px]">
+    <div className="relative rounded-2xl border bg-white shadow p-3 w-[340px]">
+      <button
+        className="absolute top-1 right-1 text-xs text-gray-500"
+        onClick={() => deleteElements({ nodes: [{ id }] })}
+      >
+        ×
+      </button>
       <div className="font-semibold">Data Upload</div>
       <div className="text-xs text-gray-500 mb-2">CSV or DB table</div>
 
@@ -315,9 +323,16 @@ function DataBrowserNode({ id, data }: NodeProps<DataBrowserData>) {
   const active = data.activeStream || streams[0] || "main";
   const ds = (store.datasets[id] && store.datasets[id][active]) || data.dataset || null;
   const preview = tablePreview(ds, 5);
+  const { deleteElements } = useReactFlow();
 
   return (
-    <div className="rounded-2xl border bg-white shadow p-3 w-[460px]">
+    <div className="relative rounded-2xl border bg-white shadow p-3 w-[460px]">
+      <button
+        className="absolute top-1 right-1 text-xs text-gray-500"
+        onClick={() => deleteElements({ nodes: [{ id }] })}
+      >
+        ×
+      </button>
       <div className="font-semibold">Data Browser</div>
       <div className="text-xs text-gray-500 mb-2">Top 5 rows</div>
 
@@ -404,6 +419,7 @@ function TransformerNode({ id, data }: NodeProps<TransformerData>) {
   const setDataset = useGraphStore((s) => s.setDataset);
   const store = useGraphStore();
   const [status, setStatus] = useState<string>(data.status ?? "");
+  const { deleteElements } = useReactFlow();
 
   const streams = Object.keys(store.datasets[id] || {});
   const active = data.activeStream || streams[0] || "main";
@@ -455,7 +471,13 @@ function TransformerNode({ id, data }: NodeProps<TransformerData>) {
   };
 
   return (
-    <div className="rounded-2xl border bg-white shadow p-3 w-[460px]">
+    <div className="relative rounded-2xl border bg-white shadow p-3 w-[460px]">
+      <button
+        className="absolute top-1 right-1 text-xs text-gray-500"
+        onClick={() => deleteElements({ nodes: [{ id }] })}
+      >
+        ×
+      </button>
       <div className="font-semibold">Transformer (Python map)</div>
       <div className="text-xs text-gray-500 mb-2">Use f(*xs) -&gt; value</div>
 
@@ -547,9 +569,16 @@ function DecisionVarNode({ id, data }: NodeProps<DecisionVarData>) {
   const store = useGraphStore();
   const streams = Object.keys(store.datasets[id] || {});
   const active = data.activeStream || streams[0] || "main";
+  const { deleteElements } = useReactFlow();
 
   return (
-    <div className="rounded-2xl border bg-white shadow p-3 w-[320px]">
+    <div className="relative rounded-2xl border bg-white shadow p-3 w-[320px]">
+      <button
+        className="absolute top-1 right-1 text-xs text-gray-500"
+        onClick={() => deleteElements({ nodes: [{ id }] })}
+      >
+        ×
+      </button>
       <div className="font-semibold">Decision Variable</div>
       <div className="text-xs text-gray-500 mb-2">xᵢ settings</div>
 
@@ -616,6 +645,7 @@ function ConstraintNode({ id, data }: NodeProps<ConstraintData>) {
 
   const cols = data.inputColumns || [];
   const aggs = data.aggs || [];
+  const { deleteElements } = useReactFlow();
 
   const addAgg = () => {
     const firstCol = cols[0] || "";
@@ -629,7 +659,13 @@ function ConstraintNode({ id, data }: NodeProps<ConstraintData>) {
   };
 
   return (
-    <div className="rounded-2xl border bg-white shadow p-3 w-[480px]">
+    <div className="relative rounded-2xl border bg-white shadow p-3 w-[480px]">
+      <button
+        className="absolute top-1 right-1 text-xs text-gray-500"
+        onClick={() => deleteElements({ nodes: [{ id }] })}
+      >
+        ×
+      </button>
       <div className="font-semibold">Constraint</div>
       <div className="text-xs text-gray-500 mb-2">Linear vars + data aggregates</div>
 
@@ -714,6 +750,7 @@ function ConstraintNode({ id, data }: NodeProps<ConstraintData>) {
 // 6) Solver Node (GLPK.js)
 function SolverNode({ id, data }: NodeProps<SolverData>) {
   const [busy, setBusy] = useState(false);
+  const { deleteElements } = useReactFlow();
 
   const solve = async () => {
     setBusy(true);
@@ -818,7 +855,13 @@ function SolverNode({ id, data }: NodeProps<SolverData>) {
   };
 
   return (
-    <div className="rounded-2xl border bg-white shadow p-3 w-[400px]">
+    <div className="relative rounded-2xl border bg-white shadow p-3 w-[400px]">
+      <button
+        className="absolute top-1 right-1 text-xs text-gray-500"
+        onClick={() => deleteElements({ nodes: [{ id }] })}
+      >
+        ×
+      </button>
       <div className="font-semibold">Solver</div>
       <div className="text-xs text-gray-500 mb-2">GLPK.js MILP</div>
 
@@ -951,10 +994,19 @@ export default function Page() {
       const streams = dsMap[src] || {};
       (outAdj[src] || []).forEach(({ to, stream }) => {
         const ds = streams[stream];
-        if (ds) { updates[to] = updates[to] || {}; updates[to][stream] = ds; }
+        if (ds && store.datasets[to]?.[stream] !== ds) {
+          updates[to] = updates[to] || {};
+          updates[to][stream] = ds;
+        }
       });
     });
     if (Object.keys(updates).length === 0) return;
+
+    Object.entries(updates).forEach(([nid, streams]) => {
+      Object.entries(streams).forEach(([st, ds]) => {
+        store.setDataset(nid, st, ds);
+      });
+    });
 
     setNodes((nds) => nds.map((n) => {
       if (!updates[n.id]) return n;
@@ -1050,6 +1102,7 @@ export default function Page() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onEdgeClick={(_, edge) => setEdges((eds) => eds.filter((e) => e.id !== edge.id))}
           nodeTypes={nodeTypes}
           fitView
           onSelectionChange={(s) => setSelected((s?.nodes && s.nodes[0]) || null)}
