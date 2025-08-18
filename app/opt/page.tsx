@@ -260,7 +260,7 @@ function DataUploadNode({ id, data }: NodeProps<DataUploadData>) {
 
 // 2) Data Browser Node
 function DataBrowserNode({ id, data }: NodeProps<DataBrowserData>) {
-  const ds = data.dataset;
+  const ds = data.dataset?? null;
   const preview = tablePreview(ds, 5);
 
   return (
