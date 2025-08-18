@@ -883,12 +883,12 @@ export default function Page() {
 
   const initialEdges = useMemo<Edge[]>(() => [
     { id: "e-up-db", source: "up1", target: "db1", sourceHandle: "ds:main", targetHandle: "ds:main" },
-    { id: "e-db-tr", source: "db1", target: "tr1", sourceHandle: "ds:main", targetHandle: "ds:main" },
-    { id: "e-tr-x", source: "tr1", target: "x1", sourceHandle: "ds:main", targetHandle: "ds:main" },
-    { id: "e-x-c", source: "x1", target: "c1", sourceHandle: "ds:main", targetHandle: "ds:main" },
-    { id: "e-x-s", source: "x1", target: "s1", sourceHandle: "var", targetHandle: "vars" },
-    { id: "e-y-s", source: "y1", target: "s1", sourceHandle: "var", targetHandle: "vars" },
-    { id: "e-c-s", source: "c1", target: "s1", sourceHandle: "constraint", targetHandle: "constraints" },
+    //{ id: "e-db-tr", source: "db1", target: "tr1", sourceHandle: "ds:main", targetHandle: "ds:main" },
+    //{ id: "e-tr-x", source: "tr1", target: "x1", sourceHandle: "ds:main", targetHandle: "ds:main" },
+    //{ id: "e-x-c", source: "x1", target: "c1", sourceHandle: "ds:main", targetHandle: "ds:main" },
+    //{ id: "e-x-s", source: "x1", target: "s1", sourceHandle: "var", targetHandle: "vars" },
+    //{ id: "e-y-s", source: "y1", target: "s1", sourceHandle: "var", targetHandle: "vars" },
+    //{ id: "e-c-s", source: "c1", target: "s1", sourceHandle: "constraint", targetHandle: "constraints" },
   ], []);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
