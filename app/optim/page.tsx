@@ -419,6 +419,18 @@ function TransformerNode({ id, data }: NodeProps<TransformerData>) {
       if (!ready) { setStatus("Loading Python runtime..."); return; }
       if (!pyodide) return;
 
+      // Derive input columns from stored state or existing edges, whichever has data
+      const rfEdges: Edge[] = (window as any).__rf?.getEdges?.() || [];
+      const colsFromEdges =
+        rfEdges
+          .filter(e => e.target === id && e.sourceHandle?.startsWith("col:"))
+          .map(e => e.sourceHandle!.slice(4));
+      
+      const inputCols = (data.inputColumns && data.inputColumns.length > 0)
+        ? data.inputColumns
+        : colsFromEdges;
+
+
       const values = ds.rows.map((r) => inputCols.map((c) => r[c]));
       await pyodide.loadPackagesFromImports?.("");
       pyodide.globals.set("vals", values);
@@ -463,6 +475,12 @@ function TransformerNode({ id, data }: NodeProps<TransformerData>) {
           ))}
         </select>
       </div>
+      {/* Generic column drop zone so you can connect any column first */}
+      <div className="relative inline-block mb-2 text-[11px] text-gray-600">
+        <Handle type="target" position={Position.Left} id="col:any" />
+        columns
+      </div>
+
 
       {/* Column inputs */}
       <div className="flex flex-wrap gap-1 mb-2">
