@@ -431,7 +431,7 @@ function TransformerNode({ id, data }: NodeProps<TransformerData>) {
   console.log(ds);
   const runTransform = async () => {
     try {
-      console.log(ds);
+      
       if (!ds) { setStatus("No dataset connected."); return; }
       if (!ready) { setStatus("Loading Python runtime..."); return; }
       if (!pyodide) return;
@@ -461,7 +461,7 @@ function TransformerNode({ id, data }: NodeProps<TransformerData>) {
       const newRows = ds.rows.map((r, i) => ({ ...r, [targetCol]: jsOuts[i] }));
       const newColumns = ds.columns.includes(targetCol) ? ds.columns : [...ds.columns, targetCol];
       const newDs: Dataset = { rows: newRows, columns: newColumns };
-
+      console.log(newDs);
       setDataset(id, active, newDs);
       (data as any).status = `OK: wrote ${targetCol}`;
       setStatus(`OK: wrote ${targetCol}`);
