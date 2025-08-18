@@ -702,6 +702,7 @@ function SolverNode({ id, data }: NodeProps<SolverData>) {
           >
             <option value="bnb">Branch & Bound</option>
             <option value="bnc">Branch & Cut</option>
+            <option value="auto">Automatic</option>
           </select>
         </div>
       </div>
