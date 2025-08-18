@@ -21,6 +21,7 @@ import ReactFlow, {
   addEdge,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   Handle,
   Position,
   NodeProps,
@@ -42,6 +43,7 @@ export type StudioNodeType =
   | "dataUpload"
   | "dataBrowser"
   | "transformer"
+  | "printer"
   | "decisionVar"
   | "constraint"
   | "solver";
@@ -61,6 +63,12 @@ interface DataUploadData {
 }
 
 interface DataBrowserData {
+  dataset?: Dataset | null;
+  activeStream?: StreamName;
+}
+
+interface PrinterData {
+  column?: string | null;
   dataset?: Dataset | null;
   activeStream?: StreamName;
 }
@@ -199,6 +207,7 @@ function DataUploadNode({ id, data }: NodeProps<DataUploadData>) {
   const [delimiter, setDelimiter] = useState<string>(data.delimiter ?? ",");
   const [status, setStatus] = useState<string>("");
   const [stream, setStream] = useState<StreamName>(data.stream || "main");
+  const { deleteElements } = useReactFlow();
 
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -226,7 +235,13 @@ function DataUploadNode({ id, data }: NodeProps<DataUploadData>) {
   };
 
   return (
-    <div className="rounded-2xl border bg-white shadow p-3 w-[340px]">
+    <div className="relative rounded-2xl border bg-white shadow p-3 w-[340px]">
+      <button
+        className="absolute top-1 right-1 text-xs text-gray-500"
+        onClick={() => deleteElements({ nodes: [{ id }] })}
+      >
+        ×
+      </button>
       <div className="font-semibold">Data Upload</div>
       <div className="text-xs text-gray-500 mb-2">CSV or DB table</div>
 
@@ -315,9 +330,16 @@ function DataBrowserNode({ id, data }: NodeProps<DataBrowserData>) {
   const active = data.activeStream || streams[0] || "main";
   const ds = (store.datasets[id] && store.datasets[id][active]) || data.dataset || null;
   const preview = tablePreview(ds, 5);
+  const { deleteElements } = useReactFlow();
 
   return (
-    <div className="rounded-2xl border bg-white shadow p-3 w-[460px]">
+    <div className="relative rounded-2xl border bg-white shadow p-3 w-[460px]">
+      <button
+        className="absolute top-1 right-1 text-xs text-gray-500"
+        onClick={() => deleteElements({ nodes: [{ id }] })}
+      >
+        ×
+      </button>
       <div className="font-semibold">Data Browser</div>
       <div className="text-xs text-gray-500 mb-2">Top 5 rows</div>
 
@@ -380,7 +402,65 @@ function DataBrowserNode({ id, data }: NodeProps<DataBrowserData>) {
   );
 }
 
-// 3) Transformer Node
+// 3) Printer Node
+function PrinterNode({ id, data }: NodeProps<PrinterData>) {
+  const store = useGraphStore();
+  const streams = Object.keys(store.datasets[id] || {});
+  const active = data.activeStream || streams[0] || "main";
+  const ds: Dataset | null = (store.datasets[id] && store.datasets[id][active]) || data.dataset || null;
+  const col = data.column;
+  const { deleteElements } = useReactFlow();
+  const rows = col && ds ? ds.rows.slice(0, 5).map((r) => r[col]) : [];
+
+  return (
+    <div className="relative rounded-2xl border bg-white shadow p-3 w-[220px]">
+      <button
+        className="absolute top-1 right-1 text-xs text-gray-500"
+        onClick={() => deleteElements({ nodes: [{ id }] })}
+      >
+        ×
+      </button>
+      <div className="font-semibold">Printer</div>
+      {col ? (
+        <div className="text-xs text-gray-500 mb-2">
+          First 5 values for <b>{col}</b>
+        </div>
+      ) : (
+        <div className="text-xs text-gray-500 mb-2">Connect a column</div>
+      )}
+      <div className="overflow-auto border rounded max-h-56 mb-2">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50 sticky top-0">
+            {col && (
+              <tr>
+                <th className="text-left p-1 border-b">{col}</th>
+              </tr>
+            )}
+          </thead>
+          <tbody>
+            {rows.map((v, i) => (
+              <tr key={i} className="odd:bg-white even:bg-gray-50">
+                <td className="p-1 border-b">{String(v)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-2 flex items-center gap-3 text-[11px] text-gray-600">
+        <div className="relative">
+          <Handle type="target" position={Position.Left} id="col:any" />
+          column
+        </div>
+        <div className="relative">
+          <Handle type="target" position={Position.Left} id="ds:main" />
+          ds:main
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 4) Transformer Node
 function usePyodide() {
   const ref = useRef<any>(null);
   const [ready, setReady] = useState(false);
@@ -404,6 +484,7 @@ function TransformerNode({ id, data }: NodeProps<TransformerData>) {
   const setDataset = useGraphStore((s) => s.setDataset);
   const store = useGraphStore();
   const [status, setStatus] = useState<string>(data.status ?? "");
+  const { deleteElements } = useReactFlow();
 
   const streams = Object.keys(store.datasets[id] || {});
   const active = data.activeStream || streams[0] || "main";
@@ -455,7 +536,13 @@ function TransformerNode({ id, data }: NodeProps<TransformerData>) {
   };
 
   return (
-    <div className="rounded-2xl border bg-white shadow p-3 w-[460px]">
+    <div className="relative rounded-2xl border bg-white shadow p-3 w-[460px]">
+      <button
+        className="absolute top-1 right-1 text-xs text-gray-500"
+        onClick={() => deleteElements({ nodes: [{ id }] })}
+      >
+        ×
+      </button>
       <div className="font-semibold">Transformer (Python map)</div>
       <div className="text-xs text-gray-500 mb-2">Use f(*xs) -&gt; value</div>
 
@@ -542,14 +629,21 @@ function TransformerNode({ id, data }: NodeProps<TransformerData>) {
   );
 }
 
-// 4) Decision Variable Node
+// 5) Decision Variable Node
 function DecisionVarNode({ id, data }: NodeProps<DecisionVarData>) {
   const store = useGraphStore();
   const streams = Object.keys(store.datasets[id] || {});
   const active = data.activeStream || streams[0] || "main";
+  const { deleteElements } = useReactFlow();
 
   return (
-    <div className="rounded-2xl border bg-white shadow p-3 w-[320px]">
+    <div className="relative rounded-2xl border bg-white shadow p-3 w-[320px]">
+      <button
+        className="absolute top-1 right-1 text-xs text-gray-500"
+        onClick={() => deleteElements({ nodes: [{ id }] })}
+      >
+        ×
+      </button>
       <div className="font-semibold">Decision Variable</div>
       <div className="text-xs text-gray-500 mb-2">xᵢ settings</div>
 
@@ -607,7 +701,7 @@ function DecisionVarNode({ id, data }: NodeProps<DecisionVarData>) {
   );
 }
 
-// 5) Constraint Node with Aggregates
+// 6) Constraint Node with Aggregates
 function ConstraintNode({ id, data }: NodeProps<ConstraintData>) {
   const store = useGraphStore();
   const streams = Object.keys(store.datasets[id] || {});
@@ -616,6 +710,7 @@ function ConstraintNode({ id, data }: NodeProps<ConstraintData>) {
 
   const cols = data.inputColumns || [];
   const aggs = data.aggs || [];
+  const { deleteElements } = useReactFlow();
 
   const addAgg = () => {
     const firstCol = cols[0] || "";
@@ -629,7 +724,13 @@ function ConstraintNode({ id, data }: NodeProps<ConstraintData>) {
   };
 
   return (
-    <div className="rounded-2xl border bg-white shadow p-3 w-[480px]">
+    <div className="relative rounded-2xl border bg-white shadow p-3 w-[480px]">
+      <button
+        className="absolute top-1 right-1 text-xs text-gray-500"
+        onClick={() => deleteElements({ nodes: [{ id }] })}
+      >
+        ×
+      </button>
       <div className="font-semibold">Constraint</div>
       <div className="text-xs text-gray-500 mb-2">Linear vars + data aggregates</div>
 
@@ -711,9 +812,10 @@ function ConstraintNode({ id, data }: NodeProps<ConstraintData>) {
   );
 }
 
-// 6) Solver Node (GLPK.js)
+// 7) Solver Node (GLPK.js)
 function SolverNode({ id, data }: NodeProps<SolverData>) {
   const [busy, setBusy] = useState(false);
+  const { deleteElements } = useReactFlow();
 
   const solve = async () => {
     setBusy(true);
@@ -818,7 +920,13 @@ function SolverNode({ id, data }: NodeProps<SolverData>) {
   };
 
   return (
-    <div className="rounded-2xl border bg-white shadow p-3 w-[400px]">
+    <div className="relative rounded-2xl border bg-white shadow p-3 w-[400px]">
+      <button
+        className="absolute top-1 right-1 text-xs text-gray-500"
+        onClick={() => deleteElements({ nodes: [{ id }] })}
+      >
+        ×
+      </button>
       <div className="font-semibold">Solver</div>
       <div className="text-xs text-gray-500 mb-2">GLPK.js MILP</div>
 
@@ -873,7 +981,7 @@ function NodeEditor({ selected }: { selected: Node | null }) {
     <div className="p-4 text-sm">
       <div className="font-semibold mb-2">Editor: {selected.type}</div>
       <div className="text-gray-600">
-        Connect <b>ds:&lt;name&gt;</b> handles to pass datasets across nodes. Drag column chips from <b>Data Browser</b> into <b>Transformer</b> / <b>DecisionVar</b> / <b>Constraint</b>. In constraints, use aggregates to create coefficients or constants.
+        Connect <b>ds:&lt;name&gt;</b> handles to pass datasets across nodes. Drag column chips from <b>Data Browser</b> into <b>Transformer</b> / <b>DecisionVar</b> / <b>Constraint</b> / <b>Printer</b>. In constraints, use aggregates to create coefficients or constants.
       </div>
     </div>
   );
@@ -883,6 +991,7 @@ function NodeEditor({ selected }: { selected: Node | null }) {
 const nodeTypes = {
   dataUpload: DataUploadNode,
   dataBrowser: DataBrowserNode,
+  printer: PrinterNode,
   transformer: TransformerNode,
   decisionVar: DecisionVarNode,
   constraint: ConstraintNode,
@@ -927,7 +1036,10 @@ export default function Page() {
     const all: Set<Key> = new Set();
 
     edges.forEach((e) => {
-      const isDs = (e.sourceHandle || "").startsWith("ds:") || e.sourceHandle === "dataset";
+      const isDs =
+        (e.sourceHandle || "").startsWith("ds:") ||
+        e.sourceHandle === "dataset" ||
+        (e.sourceHandle || "").startsWith("col:");
       if (!isDs) return;
       const stream = streamFromHandle(e.sourceHandle || undefined);
       outAdj[e.source] = outAdj[e.source] || [];
@@ -951,10 +1063,19 @@ export default function Page() {
       const streams = dsMap[src] || {};
       (outAdj[src] || []).forEach(({ to, stream }) => {
         const ds = streams[stream];
-        if (ds) { updates[to] = updates[to] || {}; updates[to][stream] = ds; }
+        if (ds && store.datasets[to]?.[stream] !== ds) {
+          updates[to] = updates[to] || {};
+          updates[to][stream] = ds;
+        }
       });
     });
     if (Object.keys(updates).length === 0) return;
+
+    Object.entries(updates).forEach(([nid, streams]) => {
+      Object.entries(streams).forEach(([st, ds]) => {
+        store.setDataset(nid, st, ds);
+      });
+    });
 
     setNodes((nds) => nds.map((n) => {
       if (!updates[n.id]) return n;
@@ -993,6 +1114,20 @@ export default function Page() {
         return n;
       }));
     }
+
+    // Column wiring: any -> Printer (for preview)
+    if (srcCol && targetId) {
+      setNodes((nds) =>
+        nds.map((n) => {
+          if (n.id !== targetId) return n;
+          if (n.type === "printer") {
+            const pd = n.data as PrinterData;
+            return { ...n, data: { ...pd, column: srcCol } };
+          }
+          return n;
+        })
+      );
+    }
   }, [setEdges, setNodes]);
 
   // -------- Node Palette --------
@@ -1007,6 +1142,7 @@ export default function Page() {
       type === "dataUpload" ? `up-${uid("n")}` :
       type === "dataBrowser" ? `db-${uid("n")}` :
       type === "transformer" ? `tr-${uid("n")}` :
+      type === "printer" ? `pr-${uid("n")}` :
       type === "decisionVar" ? `dv-${uid("n")}` :
       type === "constraint" ? `ct-${uid("n")}` :
       `sv-${uid("n")}`
@@ -1016,9 +1152,13 @@ export default function Page() {
     let data: any = {};
     if (type === "dataUpload") data = { mode: "file", dataset: null, stream: "main" } as DataUploadData;
     if (type === "dataBrowser") data = { dataset: null, activeStream: "main" } as DataBrowserData;
-    if (type === "transformer") data = { code: "def f(*xs):\n    return xs[0]", inputColumns: [], outputColumn: "new_feature", activeStream: "main" } as TransformerData;
-    if (type === "decisionVar") data = { name: "x", varType: "integer", lower: 0, upper: 10, objectiveCoeff: 1, activeStream: "main" } as DecisionVarData;
-    if (type === "constraint") data = { name: "c", expr: "x", sense: "<=", rhs: 10, activeStream: "main", aggs: [] } as ConstraintData;
+    if (type === "transformer")
+      data = { code: "def f(*xs):\n    return xs[0]", inputColumns: [], outputColumn: "new_feature", activeStream: "main" } as TransformerData;
+    if (type === "printer") data = { column: null, activeStream: "main" } as PrinterData;
+    if (type === "decisionVar")
+      data = { name: "x", varType: "integer", lower: 0, upper: 10, objectiveCoeff: 1, activeStream: "main" } as DecisionVarData;
+    if (type === "constraint")
+      data = { name: "c", expr: "x", sense: "<=", rhs: 10, activeStream: "main", aggs: [] } as ConstraintData;
     if (type === "solver") data = { objective: "maximize", algorithm: "bnb" } as SolverData;
 
     const node: Node = { id, type, position, data } as Node;
@@ -1037,6 +1177,7 @@ export default function Page() {
           <button className="px-2 py-1 rounded bg-gray-900 text-white text-xs" onClick={() => addNode("dataUpload")}>Data Upload</button>
           <button className="px-2 py-1 rounded bg-gray-900 text-white text-xs" onClick={() => addNode("dataBrowser")}>Data Browser</button>
           <button className="px-2 py-1 rounded bg-gray-900 text-white text-xs" onClick={() => addNode("transformer")}>Transformer</button>
+          <button className="px-2 py-1 rounded bg-gray-900 text-white text-xs" onClick={() => addNode("printer")}>Printer</button>
           <button className="px-2 py-1 rounded bg-gray-900 text-white text-xs" onClick={() => addNode("decisionVar")}>Decision Var</button>
           <button className="px-2 py-1 rounded bg-gray-900 text-white text-xs" onClick={() => addNode("constraint")}>Constraint</button>
           <button className="px-2 py-1 rounded bg-gray-900 text-white text-xs" onClick={() => addNode("solver")}>Solver</button>
@@ -1050,6 +1191,7 @@ export default function Page() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onEdgeClick={(_, edge) => setEdges((eds) => eds.filter((e) => e.id !== edge.id))}
           nodeTypes={nodeTypes}
           fitView
           onSelectionChange={(s) => setSelected((s?.nodes && s.nodes[0]) || null)}
@@ -1067,6 +1209,7 @@ export default function Page() {
           <ol className="list-decimal ml-4 space-y-1">
             <li>Use the <b>Node Palette</b> to add nodes (you can add many of each type).</li>
             <li>Connect <code>ds:&lt;name&gt;</code> handles to pass datasets; drag column chips from <b>Data Browser</b> to other nodes.</li>
+            <li>Use the <b>Printer</b> node to preview column values from any connected dataset.</li>
             <li>Transformer can overwrite a source column or write a new column via <code>def f(*xs)</code>.</li>
             <li>Constraint aggregates (sum/mean) can bind to vars (coefficients) or remain constants (moved to RHS).</li>
             <li>Click <b>Solve</b> on the Solver to run GLPK (BnB/BnC) with a chosen MIP gap.</li>
