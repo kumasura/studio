@@ -21,6 +21,7 @@
     "@vercel/kv": "latest",
     "zustand": "latest",
     "papaparse": "latest",
+    "@types/papaparse": "latest",
     "glpk.js": "latest",
     "@monaco-editor/react": "latest"
   },
