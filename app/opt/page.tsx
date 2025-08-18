@@ -46,8 +46,11 @@ export type StudioNodeType =
   | "constraint"
   | "solver";
 
-// Node data payloads
-interface DataUploadData$1dataset?: Dataset | null;
+interface DataUploadData {
+  mode: "file" | "db";
+  fileName?: string;
+  delimiter?: string;
+  dataset?: Dataset | null;
   db?: {
     provider: "supabase" | "postgres" | "mysql" | "mssql";
     connectionUrl?: string;
@@ -55,6 +58,7 @@ interface DataUploadData$1dataset?: Dataset | null;
     status?: string;
   };
 }
+
 
 interface DataBrowserData {
   dataset?: Dataset | null; // input
