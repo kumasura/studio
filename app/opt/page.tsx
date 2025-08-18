@@ -35,7 +35,7 @@ const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false 
 
 // ---------- Types ----------
 
-type Dataset = { rows: any[]; columns: string[] } | null;
+type Dataset = { rows: any[]; columns: string[] };
 
 // Node kinds for our studio
 export type StudioNodeType =
@@ -47,11 +47,7 @@ export type StudioNodeType =
   | "solver";
 
 // Node data payloads
-interface DataUploadData {
-  mode: "file" | "db";
-  fileName?: string;
-  delimiter?: string;
-  dataset: Dataset;
+interface DataUploadData$1dataset?: Dataset | null;
   db?: {
     provider: "supabase" | "postgres" | "mysql" | "mssql";
     connectionUrl?: string;
@@ -61,7 +57,7 @@ interface DataUploadData {
 }
 
 interface DataBrowserData {
-  dataset: Dataset; // input
+  dataset?: Dataset | null; // input
 }
 
 interface TransformerData {
@@ -115,7 +111,7 @@ const useGraphStore = create<GraphState>((set) => ({
 
 // ---------- Utilities ----------
 
-function tablePreview(ds: Dataset, n = 5): { columns: string[]; rows: any[] } {
+function tablePreview(ds: Dataset | null, n = 5): { columns: string[]; rows: any[] } {
   if (!ds) return { columns: [], rows: [] };
   return { columns: ds.columns, rows: ds.rows.slice(0, n) };
 }
