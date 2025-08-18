@@ -412,9 +412,10 @@ function TransformerNode({ id, data }: NodeProps<TransformerData>) {
   const inputCols = data.inputColumns || [];
   const overwrite = !!data.overwrite;
   const outputCol = overwrite ? (inputCols[0] ?? data.outputColumn ?? "new_feature") : (data.outputColumn || "new_feature");
-
+  console.log(ds);
   const runTransform = async () => {
     try {
+      console.log(ds);
       if (!ds) { setStatus("No dataset connected."); return; }
       if (!ready) { setStatus("Loading Python runtime..."); return; }
       if (!pyodide) return;
